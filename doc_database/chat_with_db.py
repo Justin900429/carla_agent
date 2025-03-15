@@ -1,88 +1,97 @@
-from langchain_openai import ChatOpenAI
-from langchain.chains.history_aware_retriever import create_history_aware_retriever
+import os
+
+from dotenv import load_dotenv
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains.retrieval import create_retrieval_chain
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.documents import Document
+from langchain_core.output_parsers import CommaSeparatedListOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import Runnable
+from langchain_openai import ChatOpenAI
+
 from doc_database.embedding import EmbeddingManager
-from langchain_core.messages import AIMessage, HumanMessage
-from dotenv import load_dotenv
 
 
 class ConversationalRetrievalAgent:
-    def __init__(self, embedding_manager: EmbeddingManager, temperature: float = 0.5):
-        self.embedding_manager = embedding_manager
+    def __init__(
+        self,
+        document_embedding_manager: EmbeddingManager,
+        api_embedding_manager: EmbeddingManager,
+        temperature: float = 0.5,
+    ):
+        self.document_embedding_manager = document_embedding_manager
+        self.api_embedding_manager = api_embedding_manager
         self.llm = ChatOpenAI(temperature=temperature)
         self.chat_history = []
 
-    def get_chat_history(self, inputs):
-        res = []
-        for human, ai in inputs:
-            res.append(f"Human:{human}\nAI:{ai}")
-        return "\n".join(res)
-
-    def create_history_aware_retriever_prompt(self):
-        contextualize_q_system_prompt = (
-            "Given a chat history and the latest user question "
-            "which might reference context in the chat history, "
-            "formulate a standalone question which can be understood "
-            "without the chat history. Do NOT answer the question, "
-            "just reformulate it if needed and otherwise return it as is."
+    def create_function_retrieval_prompt(self) -> ChatPromptTemplate:
+        dummy_parser = CommaSeparatedListOutputParser()
+        sysmtem_prompt = (
+            "You are an expert in the field of carla "
+            "and are given a context extracted "
+            "from the carla documentation. Please provide "
+            "a list of functions that is required and should "
+            f"be search for the usage. {dummy_parser.get_format_instructions()}"
         )
-
         prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", contextualize_q_system_prompt),
-                MessagesPlaceholder("chat_history"),
-                ("human", "{input}"),
+                ("system", sysmtem_prompt),
+                ("human", "{context}"),
             ]
         )
         return prompt
 
-    def create_chat_prompt(self):
-        system_prompt = system_prompt = (
+    def setup_function_retreival_bot(self) -> Runnable:
+        retriever = self.document_embedding_manager.vectordb.as_retriever(search_kwargs={"k": 4})
+        question_answer_chain = create_stuff_documents_chain(
+            self.llm,
+            self.create_function_retrieval_prompt(),
+            output_parser=CommaSeparatedListOutputParser(),
+        )
+        return create_retrieval_chain(retriever, question_answer_chain)
+
+    def create_chat_prompt(self) -> ChatPromptTemplate:
+        system_prompt = (
             "You are an assistant for writing code to create a scene within carla. "
             "Use the following pieces of retrieved context to answer "
             "the question. If you don't know the answer, say that you "
             "don't know. The output should be a valid python code only without any other text."
-            "\n\n"
-            "{context}"
         )
         prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", system_prompt),
-                MessagesPlaceholder("chat_history"),
                 ("human", "{input}"),
             ]
         )
-
         return prompt
 
     def setup_bot(self):
-        retriever = self.embedding_manager.vectordb.as_retriever(search_kwargs={"k": 4})
-        history_aware_retriever = create_history_aware_retriever(
-            self.llm, retriever, self.create_history_aware_retriever_prompt()
-        )
-        question_answer_chain = create_stuff_documents_chain(self.llm, self.create_chat_prompt())
-        self.bot = create_retrieval_chain(history_aware_retriever, question_answer_chain)
+        self.api_retriever = self.api_embedding_manager.vectordb.as_retriever(search_kwargs={"k": 4})
+        self.bot = self.setup_function_retreival_bot()
 
-    def ask_question(self, question):
-        result = self.bot.invoke({"input": question, "chat_history": self.chat_history})
-        self.chat_history.append(
-            [
-                HumanMessage(content=question),
-                AIMessage(content=result["answer"]),
-            ]
-        )
-        return result["answer"]
+    def __call__(self, query: str) -> str:
+        def stack_output(data: list[list[Document]]):
+            return "\n\n".join([doc.page_content for docs in data for doc in docs])
+
+        return stack_output(self.api_retriever.batch(self.bot.invoke({"input": query})))
+
+    def test_fetch_from_db(self, query: str, save_folder: str = "test_fetch"):
+        os.makedirs(save_folder, exist_ok=True)
+        retriever = self.document_embedding_manager.vectordb.as_retriever(search_kwargs={"k": 4})
+        relevant_docs = retriever.invoke(query)
+        for i, doc in enumerate(relevant_docs, 1):
+            with open(os.path.join(save_folder, f"doc_{i}.md"), "w") as f:
+                f.write(doc.page_content)
 
 
 if __name__ == "__main__":
     load_dotenv()
-    embedding_manager = EmbeddingManager(persist_directory="db")
-    embedding_manager.load_embeddings()
-    agent = ConversationalRetrievalAgent(embedding_manager)
+    document_embedding_manager = EmbeddingManager(persist_directory="db/documents", auto_load=True)
+    api_embedding_manager = EmbeddingManager(persist_directory="db/api", auto_load=True)
+    agent = ConversationalRetrievalAgent(
+        document_embedding_manager,
+        api_embedding_manager,
+    )
     agent.setup_bot()
-    while True:
-        query = input("Enter a question: ")
-        answer = agent.ask_question(query)
-        print(answer)
+    query = input("Enter a question: ")
+    print(agent(query))

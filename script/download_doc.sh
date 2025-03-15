@@ -1,3 +1,5 @@
+#!/bin/bash -e
+
 VERSION=${1:-0.9.15}
 
 # Download the zip file

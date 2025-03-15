@@ -560,6 +560,43 @@ wheels = [
 ]
 
 [[package]]
+name = "google-ai-generativelanguage"
+version = "0.6.16"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", extra = ["grpc"] },
+    { name = "google-auth" },
+    { name = "proto-plus" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7a/8b/cb2da099282cf1bf65e4695a1365166652fd3cf136ce6af2cf9129394a54/google_ai_generativelanguage-0.6.16.tar.gz", hash = "sha256:494f73c44dede1fd6853e579efe590f139d0654481d2a5bdadfc415ec5351d3d", size = 1418441 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/e5/b136691121ed600afc0327ffe3a5da3894774359f15520f33f1653c79a41/google_ai_generativelanguage-0.6.16-py3-none-any.whl", hash = "sha256:b53c736b8ebed75fe040d48740b0a15370d75e7dbc72249fb7acd2c9171bc072", size = 1353133 },
+]
+
+[[package]]
+name = "google-api-core"
+version = "2.24.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-auth" },
+    { name = "googleapis-common-protos" },
+    { name = "proto-plus" },
+    { name = "protobuf" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/09/5c/085bcb872556934bb119e5e09de54daa07873f6866b8f0303c49e72287f7/google_api_core-2.24.2.tar.gz", hash = "sha256:81718493daf06d96d6bc76a91c23874dbf2fac0adbbf542831b805ee6e974696", size = 163516 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/46/95/f472d85adab6e538da2025dfca9e976a0d125cc0af2301f190e77b76e51c/google_api_core-2.24.2-py3-none-any.whl", hash = "sha256:810a63ac95f3c441b7c0e43d344e372887f62ce9071ba972eacf32672e072de9", size = 160061 },
+]
+
+[package.optional-dependencies]
+grpc = [
+    { name = "grpcio" },
+    { name = "grpcio-status" },
+]
+
+[[package]]
 name = "google-auth"
 version = "2.38.0"
 source = { registry = "https://pypi.org/simple" }
@@ -621,6 +658,20 @@ wheels = [
 ]
 
 [[package]]
+name = "grpcio-status"
+version = "1.71.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "googleapis-common-protos" },
+    { name = "grpcio" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d7/53/a911467bece076020456401f55a27415d2d70d3bc2c37af06b44ea41fc5c/grpcio_status-1.71.0.tar.gz", hash = "sha256:11405fed67b68f406b3f3c7c5ae5104a79d2d309666d10d61b152e91d28fb968", size = 13669 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ad/d6/31fbc43ff097d8c4c9fc3df741431b8018f67bf8dfbe6553a555f6e5f675/grpcio_status-1.71.0-py3-none-any.whl", hash = "sha256:843934ef8c09e3e858952887467f8256aac3910c55f077a359a65b2b3cde3e68", size = 14424 },
+]
+
+[[package]]
 name = "h11"
 version = "0.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -628,6 +679,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/f5/38/3af3d3633a34a3316
 wheels = [
     { url = "https://files.pythonhosted.org/packages/95/04/ff642e65ad6b90db43e668d70ffb6736436c7ce41fcc549f4e9472234127/h11-0.14.0-py3-none-any.whl", hash = "sha256:e3fe4ac4b851c468cc8363d500db52c2ead036020723024a109d37346efaa761", size = 58259 },
 ]
+
+[[package]]
+name = "html2text"
+version = "2024.2.26"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1a/43/e1d53588561e533212117750ee79ad0ba02a41f52a08c1df3396bd466c05/html2text-2024.2.26.tar.gz", hash = "sha256:05f8e367d15aaabc96415376776cdd11afd5127a77fce6e36afc60c563ca2c32", size = 56527 }
 
 [[package]]
 name = "html5lib"
@@ -906,6 +963,21 @@ wheels = [
 ]
 
 [[package]]
+name = "langchain-google-genai"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "filetype" },
+    { name = "google-ai-generativelanguage" },
+    { name = "langchain-core" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d7/88/d6b12d4fe8067f5df710a819cae49cd3567c4b92ad5e240ddd549e396872/langchain_google_genai-2.1.0.tar.gz", hash = "sha256:86a3e12436f2ea1ce07888cb33fd80884bce5953be6cfe63e8493c8c0cdf3e17", size = 35916 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d2/e0/65523fcd262ca7d76a1398ff69ad4d0583cf39904ed53d5b22726bb2d2cb/langchain_google_genai-2.1.0-py3-none-any.whl", hash = "sha256:6894009385670a75ba30d146d3f4d9ddb7ae8e425990b64f4983050111c2ed97", size = 40197 },
+]
+
+[[package]]
 name = "langchain-openai"
 version = "0.3.8"
 source = { registry = "https://pypi.org/simple" }
@@ -1083,6 +1155,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec958cb99bd3efefba235e65cdeb9c84d24a8293ba1d90/mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba", size = 8729 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979 },
+]
+
+[[package]]
+name = "mistletoe"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/11/96/ea46a376a7c4cd56955ecdfff0ea68de43996a4e6d1aee4599729453bd11/mistletoe-1.4.0.tar.gz", hash = "sha256:1630f906e5e4bbe66fdeb4d29d277e2ea515d642bb18a9b49b136361a9818c9d", size = 107203 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2a/0f/b5e545f0c7962be90366af3418989b12cf441d9da1e5d89d88f2f3e5cf8f/mistletoe-1.4.0-py3-none-any.whl", hash = "sha256:44a477803861de1237ba22e375c6b617690a31d2902b47279d1f8f7ed498a794", size = 51304 },
 ]
 
 [[package]]
@@ -1495,6 +1576,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/f3/ea/7412c79bcec06597c967d49789f5a1f7fd76a8654908feeaefafb7447c9a/propcache-0.3.0-cp310-cp310-win32.whl", hash = "sha256:bf0d9a171908f32d54f651648c7290397b8792f4303821c42a74e7805bfb813c", size = 40600 },
     { url = "https://files.pythonhosted.org/packages/a3/42/488c90190491f3e61bd2c2fb0b3d91c1c78778270dde2f0b6633fc9ff723/propcache-0.3.0-cp310-cp310-win_amd64.whl", hash = "sha256:42924dc0c9d73e49908e35bbdec87adedd651ea24c53c29cac103ede0ea1d340", size = 44714 },
     { url = "https://files.pythonhosted.org/packages/b5/35/6c4c6fc8774a9e3629cd750dc24a7a4fb090a25ccd5c3246d127b70f9e22/propcache-0.3.0-py3-none-any.whl", hash = "sha256:67dda3c7325691c2081510e92c561f465ba61b975f481735aefdfc845d2cd043", size = 12101 },
+]
+
+[[package]]
+name = "proto-plus"
+version = "1.26.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f4/ac/87285f15f7cce6d4a008f33f1757fb5a13611ea8914eb58c3d0d26243468/proto_plus-1.26.1.tar.gz", hash = "sha256:21a515a4c4c0088a773899e23c7bbade3d18f9c66c73edd4c7ee3816bc96a012", size = 56142 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4e/6d/280c4c2ce28b1593a19ad5239c8b826871fc6ec275c21afc8e1820108039/proto_plus-1.26.1-py3-none-any.whl", hash = "sha256:13285478c2dcf2abb829db158e1047e2f1e8d63a077d94263c2b88b043c75a66", size = 50163 },
 ]
 
 [[package]]
@@ -2045,14 +2138,17 @@ source = { virtual = "." }
 dependencies = [
     { name = "carla" },
     { name = "chromadb" },
+    { name = "html2text" },
     { name = "langchain", extra = ["openai"] },
     { name = "langchain-chroma" },
     { name = "langchain-community" },
     { name = "langchain-core" },
+    { name = "langchain-google-genai" },
     { name = "langchain-openai" },
     { name = "langchain-text-splitters" },
     { name = "langgraph" },
     { name = "markdown" },
+    { name = "mistletoe" },
     { name = "python-dotenv" },
     { name = "tyro" },
     { name = "unstructured" },
@@ -2067,14 +2163,17 @@ dev = [
 requires-dist = [
     { name = "carla", specifier = "==0.9.15" },
     { name = "chromadb", specifier = "==0.6.3" },
+    { name = "html2text", specifier = ">=2024.2.26" },
     { name = "langchain", extras = ["openai"], specifier = "==0.3.20" },
-    { name = "langchain-chroma", specifier = ">=0.2.2" },
+    { name = "langchain-chroma", specifier = "==0.2.2" },
     { name = "langchain-community", specifier = "==0.3.19" },
     { name = "langchain-core", specifier = "==0.3.45" },
+    { name = "langchain-google-genai", specifier = "==2.1.0" },
     { name = "langchain-openai", specifier = "==0.3.8" },
     { name = "langchain-text-splitters", specifier = "==0.3.6" },
     { name = "langgraph", specifier = "==0.3.10" },
     { name = "markdown", specifier = "==3.7" },
+    { name = "mistletoe", specifier = ">=1.4.0" },
     { name = "python-dotenv", specifier = "==1.0.1" },
     { name = "tyro", specifier = "==0.9.17" },
     { name = "unstructured", specifier = "==0.17.0" },

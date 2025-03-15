@@ -10,14 +10,17 @@ dependencies = [
     "langchain-chroma==0.2.2",
     "langchain-community==0.3.19",
     "langchain-core==0.3.45",
+    "langchain-google-genai==2.1.0",
     "langchain-openai==0.3.8",
     "langchain-text-splitters==0.3.6",
     "langchain[openai]==0.3.20",
     "langgraph==0.3.10",
     "markdown==3.7",
+    "mistletoe>=1.4.0",
     "python-dotenv==1.0.1",
     "tyro==0.9.17",
     "unstructured==0.17.0",
+    "html2text>=2024.2.26",
 ]
 
 [dependency-groups]
@@ -38,7 +41,7 @@ indent-width = 4
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "B"]
+select = ["E4", "E7", "E9", "F", "B", "I"]
 ignore = ["E501"]
 unfixable = ["B"]
 
