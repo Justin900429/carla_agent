@@ -3,29 +3,21 @@ from pathlib import Path
 import tyro
 from dotenv import load_dotenv
 
-from doc_database import APIDocumentManager, DocumentManager, EmbeddingManager
+from doc_database import APIDocumentManager, DocumentManager
 
 
 def main(directory_path: Path, db_path: Path):
-    # Create embeddings for documents
+    # # Create embeddings for documents
     doc_manager = DocumentManager(directory_path)
     doc_manager.load_documents()
     doc_manager.split_documents()
-    EmbeddingManager(
-        doc_manager.all_sections,
-        persist_directory=db_path / "documents",
-        auto_load=True,
-    )
+    doc_manager.create_embeddings(db_path / "documents")
 
     # Create embeddings for API
     api_manager = APIDocumentManager(directory_path / "python_api.md")
     api_manager.load_api_document()
     api_manager.get_api_key()
-    EmbeddingManager(
-        api_manager.all_sections,
-        persist_directory=db_path / "api",
-        auto_load=True,
-    )
+    api_manager.create_embeddings(db_path / "api")
 
 
 if __name__ == "__main__":
