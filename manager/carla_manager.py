@@ -2,6 +2,7 @@ import random
 from typing import Optional, Tuple
 
 import carla
+import numpy as np
 import pygame
 
 from manager.world_manager import WorldManager
@@ -31,8 +32,7 @@ class CarlaManager:
         self.world = self.client.get_world()
         self.world_manager.set_world(self.world)
 
-    def set_carla_sync_mode(self, sync, set_tm=False):
-        self.original_settings = self.world.get_settings()
+    def set_carla_sync_mode(self, sync):
         settings = self.world.get_settings()
         settings.synchronous_mode = sync
         if sync:
@@ -67,7 +67,7 @@ class CarlaManager:
     def __exit__(self, exc_type, exc_value, traceback):
         self.world_manager.destroy_all_actors()
         self.world_manager.world.tick()
-        self.world.apply_settings(self.original_settings)
+        self.set_carla_sync_mode(False)
         if self.render is not None:
             pygame.quit()
 
@@ -83,9 +83,7 @@ class CarlaManager:
         blueprint = self.world.get_blueprint_library().find(model)
         if transform is None:
             transform = self.get_random_location_for_spawn().transform
-        new_spawn_point = carla.Transform(
-            transform.location + carla.Location(z=0.1), transform.rotation
-        )
+        new_spawn_point = carla.Transform(transform.location + carla.Location(z=0.1), transform.rotation)
         vehicle = self.world_manager.spawn_actor(blueprint, new_spawn_point)
         if vehicle is not None:
             self.world_manager.add_ego_vehicle(vehicle)
@@ -102,16 +100,14 @@ class CarlaManager:
         blueprint = self.world.get_blueprint_library().find(model)
         if transform is None:
             transform = self.get_random_location_for_spawn().transform
-        new_spawn_point = carla.Transform(
-            transform.location + carla.Location(z=0.1), transform.rotation
-        )
+        new_spawn_point = carla.Transform(transform.location + carla.Location(z=0.1), transform.rotation)
         vehicle = self.world_manager.spawn_actor(blueprint, new_spawn_point)
         self.world_manager.add_background_vehicle(ego_id, vehicle)
 
     def get_frame(
         self,
-        birdeye_render_types: Tuple[str, ...] = ("roadmap", "actors"),
-    ):
+        birdeye_render_types: Tuple[str, ...] = ("roadmap", "actors", "waypoints"),
+    ) -> np.ndarray:
         if self.render is None:
             raise ValueError("Render is not enabled")
         birdeye_surface = self.render.render(birdeye_render_types)

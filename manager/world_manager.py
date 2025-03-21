@@ -127,6 +127,9 @@ class WorldManager:
     def on_tick(self, callable: Callable):
         self.world.on_tick(callable)
 
+    def tick(self, seconds=10):
+        self.world.tick(seconds)
+
     def add_ego_vehicle(self, vehicle: carla.Vehicle):
         if vehicle.id not in self.ego_vehicle:
             self.ego_vehicle[vehicle.id] = vehicle

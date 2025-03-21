@@ -1,5 +1,4 @@
 import math
-import weakref
 from dataclasses import dataclass
 
 import carla
@@ -403,10 +402,6 @@ class BirdeyeRender:
         obs_range: int = 60,
         d_behind: int = 16,
     ):
-        self.server_fps = 0.0
-        self.simulation_time = 0
-        self.server_clock = pygame.time.Clock()
-
         # world data
         self.world_manager = world_manager
         self.town_map = self.world_manager.map
@@ -454,28 +449,15 @@ class BirdeyeRender:
         self.result_surface = pygame.Surface((self.surface_size, self.surface_size)).convert()
         self.result_surface.set_colorkey(COLOR_BLACK)
 
-        weak_self = weakref.ref(self)
-        self.world_manager.on_tick(lambda timestamp: BirdeyeRender.on_world_tick(weak_self, timestamp))
-
     def set_hero(self, hero_actor, hero_id):
         self.hero_actor = hero_actor
         self.hero_id = hero_id
 
-    def tick(self, clock):
+    def tick(self):
         actors = self.world_manager.world.get_actors()
         self.actors_with_transforms = [(actor, actor.get_transform()) for actor in actors]
         if self.hero_actor is not None:
             self.hero_transform = self.hero_actor.get_transform()
-
-    @staticmethod
-    def on_world_tick(weak_self, timestamp):
-        self = weak_self()
-        if not self:
-            return
-
-        self.server_clock.tick()
-        self.server_fps = self.server_clock.get_fps()
-        self.simulation_time = timestamp.elapsed_seconds
 
     def _split_actors(self):
         vehicles = []
@@ -533,7 +515,10 @@ class BirdeyeRender:
             corners.append(carla.Location(x=p[0], y=p[1]))
         corners = [world_to_pixel(p) for p in corners]
         route_width = 5
-        pygame.draw.lines(surface, color, False, corners, route_width)
+        if len(corners) > 1:
+            pygame.draw.lines(surface, color, False, corners, route_width)
+        else:
+            pygame.draw.circle(surface, color, corners[0], route_width)
 
     def _get_actor_polygons(self, filt):
         actor_poly_dict = {}
@@ -566,9 +551,12 @@ class BirdeyeRender:
         self.actors_surface.set_clip(clipping_rect)
         self.result_surface.set_clip(clipping_rect)
 
+    def set_waypoints(self, waypoints: list[list[float]]):
+        self.waypoints = waypoints
+
     def render(self, render_types=None):
         # clock tick
-        self.tick(self.server_clock)
+        self.tick()
 
         if self.actors_with_transforms is None:
             return
@@ -582,8 +570,8 @@ class BirdeyeRender:
             self._get_actor_polygons("walker.*"),
         )
 
-        # self.waypoints_surface.fill(COLOR_BLACK)
-        # self.render_waypoints(self.waypoints_surface, self.waypoints, self.map_image.world_to_pixel)
+        self.waypoints_surface.fill(COLOR_BLACK)
+        self.render_waypoints(self.waypoints_surface, self.waypoints, self.map_image.world_to_pixel)
 
         # Blit surfaces
         if render_types is None:
