@@ -21,6 +21,10 @@ dependencies = [
     "tyro==0.9.17",
     "unstructured==0.17.0",
     "html2text>=2024.2.26",
+    "openai-agents==0.0.4",
+    "pygame==2.6.1",
+    "opencv-python==4.11.0.86",
+    "scikit-image>=0.25.2",
 ]
 
 [dependency-groups]
