@@ -142,6 +142,10 @@ class WorldManager:
         return list(self.ego_vehicle.keys())
 
     def destroy_all_actors(self):
-        for actor in self.world.get_actors():
-            if actor.is_alive:
-                actor.destroy()
+        for vehicle in self.ego_vehicle.values():
+            if vehicle.is_alive:
+                vehicle.destroy()
+        for vehicles in self.background_vehicles.values():
+            for vehicle in vehicles.values():
+                if vehicle.is_alive:
+                    vehicle.destroy()

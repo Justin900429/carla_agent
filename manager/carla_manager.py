@@ -20,6 +20,7 @@ class CarlaManager:
         self.client = carla.Client(host, port)
         self.client.set_timeout(10.0)
         self.world = self.client.get_world()
+        self.traffic_manager = self.client.get_trafficmanager()
         self.world_manager = WorldManager(self.world)
         self.use_render = use_render
         self.render = None
@@ -35,11 +36,9 @@ class CarlaManager:
     def set_carla_sync_mode(self, sync):
         settings = self.world.get_settings()
         settings.synchronous_mode = sync
-        if sync:
-            settings.fixed_delta_seconds = 0.1
-        else:
-            settings.fixed_delta_seconds = None
+        settings.fixed_delta_seconds = 0.1 if sync else None
         self.world.apply_settings(settings)
+        self.traffic_manager.set_synchronous_mode(sync)
 
     def _init_render(self):
         pygame.init()
@@ -65,9 +64,8 @@ class CarlaManager:
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.world_manager.destroy_all_actors()
-        self.world_manager.world.tick()
         self.set_carla_sync_mode(False)
+        self.world_manager.destroy_all_actors()
         if self.render is not None:
             pygame.quit()
 
