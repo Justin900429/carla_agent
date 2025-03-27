@@ -69,18 +69,32 @@ class CarlaManager:
         if self.render is not None:
             pygame.quit()
 
-    def get_random_location_for_spawn(self):
+    def get_random_location_for_spawn(
+        self,
+        filter_with_type: Optional[carla.LaneType] = None,
+        no_junction: bool = False,
+    ):
         driving_waypoints = self.world_manager.get_all_waypoints_from_road()
+        if filter_with_type is not None:
+            driving_waypoints = [
+                waypoint
+                for waypoint in driving_waypoints
+                if (waypoint.lane_type & filter_with_type) == waypoint.lane_type
+            ]
+        if no_junction:
+            driving_waypoints = [waypoint for waypoint in driving_waypoints if not waypoint.is_junction]
         return random.choice(driving_waypoints)
 
     def spawn_ego_vehicle(
         self,
         model: str = "vehicle.tesla.model3",
         transform: Optional[carla.Transform] = None,
-    ):
+        filter_with_type: Optional[carla.LaneType] = None,
+        no_junction: bool = False,
+    ) -> carla.Vehicle:
         blueprint = self.world.get_blueprint_library().find(model)
         if transform is None:
-            transform = self.get_random_location_for_spawn().transform
+            transform = self.get_random_location_for_spawn(filter_with_type, no_junction).transform
         new_spawn_point = carla.Transform(transform.location + carla.Location(z=0.1), transform.rotation)
         vehicle = self.world_manager.spawn_actor(blueprint, new_spawn_point)
         if vehicle is not None:
@@ -94,13 +108,16 @@ class CarlaManager:
         ego_id: int,
         model: str = "vehicle.tesla.model3",
         transform: Optional[carla.Transform] = None,
-    ):
+        filter_with_type: Optional[carla.LaneType] = None,
+        no_junction: bool = False,
+    ) -> carla.Vehicle:
         blueprint = self.world.get_blueprint_library().find(model)
         if transform is None:
-            transform = self.get_random_location_for_spawn().transform
+            transform = self.get_random_location_for_spawn(filter_with_type, no_junction).transform
         new_spawn_point = carla.Transform(transform.location + carla.Location(z=0.1), transform.rotation)
         vehicle = self.world_manager.spawn_actor(blueprint, new_spawn_point)
         self.world_manager.add_background_vehicle(ego_id, vehicle)
+        return vehicle
 
     def get_frame(
         self,

@@ -2,7 +2,6 @@ from collections import defaultdict
 from typing import Callable, Optional
 
 import carla
-
 from misc.constant import DISTANCE_FOR_ROUTE
 
 
@@ -11,6 +10,9 @@ class WorldManager:
         self.set_world(world)
         self.ego_vehicle: dict[int, carla.Vehicle] = {}
         self.background_vehicles: dict[int, dict[int, carla.Vehicle]] = defaultdict(lambda: {})
+
+    def get_actors(self):
+        return self.world.get_actors()
 
     def set_world(self, world):
         self.world = world
@@ -25,7 +27,7 @@ class WorldManager:
     def set_attribute(self, attribute, value):
         getattr(self.world, attribute)(value)
 
-    def draw_point(self, location, color=(255, 0, 0)):
+    def draw_point(self, location: carla.Location, color: tuple[int, int, int] = (255, 0, 0)):
         self.world.debug.draw_string(
             location,
             "O",
@@ -35,21 +37,28 @@ class WorldManager:
             persistent_lines=True,
         )
 
-    def get_waypoint_from_location(self, location, lane_type):
+    def get_waypoint_from_location(
+        self,
+        location: carla.Location,
+        project_to_road: bool = True,
+        lane_type: carla.LaneType = carla.LaneType.Driving,
+    ) -> carla.Waypoint:
         return self.map.get_waypoint(
             location,
-            project_to_road=True,
+            project_to_road=project_to_road,
             lane_type=lane_type,
         )
 
-    def get_waypoint_from_location_with_ensure(self, location, lane_type_list):
+    def get_waypoint_from_location_with_ensure(
+        self, location: carla.Location, lane_type_list: list[carla.LaneType]
+    ) -> carla.Waypoint:
         for lane_type in lane_type_list:
             waypoint = self.get_waypoint_from_location(location, lane_type)
             if waypoint is not None:
                 return waypoint
         return self.get_waypoint_from_location(location, carla.LaneType.Driving)
 
-    def get_all_waypoints_from_road(self, road_id: Optional[int] = None):
+    def get_all_waypoints_from_road(self, road_id: Optional[int] = None) -> list[carla.Waypoint]:
         all_waypoints = self.map.generate_waypoints(distance=DISTANCE_FOR_ROUTE)
         road_waypoints = []
         for waypoint in all_waypoints:
@@ -58,10 +67,10 @@ class WorldManager:
                 road_waypoints.append(waypoint)
         return road_waypoints
 
-    def compute_distance(self, location1, location2):
+    def compute_distance(self, location1: carla.Location, location2: carla.Location) -> float:
         return location1.distance(location2)
 
-    def get_side_walk(self, road_id):
+    def get_side_walk(self, road_id: int) -> list[carla.Waypoint]:
         road_waypoints = self.get_all_waypoints_from_road(road_id)
         side_walk_points = []
         for waypoint in road_waypoints:
@@ -74,7 +83,7 @@ class WorldManager:
                 side_walk_points.append(side_walk_point)
         return side_walk_points
 
-    def get_shoulder(self, road_id):
+    def get_shoulder(self, road_id: int) -> list[carla.Waypoint]:
         road_waypoints = self.get_all_waypoints_from_road(road_id)
         shoulder_points = []
         for waypoint in road_waypoints:
@@ -87,11 +96,13 @@ class WorldManager:
                 shoulder_points.append(shoulder_point)
         return shoulder_points
 
-    def get_driving(self, road_id):
+    def get_driving(self, road_id: int) -> list[carla.Waypoint]:
         road_waypoints = self.get_all_waypoints_from_road(road_id)
         return road_waypoints
 
-    def get_left_right_driving_points(self, road_id):
+    def get_left_right_driving_points(
+        self, road_id: int
+    ) -> tuple[list[carla.Waypoint], list[carla.Waypoint]]:
         if not isinstance(road_id, (list, tuple)):
             road_id = [road_id]
         road_waypoints = []
@@ -106,7 +117,7 @@ class WorldManager:
                 left_driving_points.append(driving_point)
         return right_driving_points, left_driving_points
 
-    def get_driving_points_with_road_and_lane_id(self, road_id, lane_id):
+    def get_driving_points_with_road_and_lane_id(self, road_id: int, lane_id: int) -> list[carla.Waypoint]:
         if not isinstance(road_id, (list, tuple)):
             road_id = [road_id]
         road_waypoints = []
