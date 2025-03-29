@@ -1,8 +1,91 @@
+import logging
 import math
+import re
 from typing import Optional
 
 import carla
 import numpy as np
+
+LOG_LEVEL_MAP = {
+    "debug": logging.DEBUG,
+    "info": logging.INFO,
+    "warning": logging.WARNING,
+    "error": logging.ERROR,
+    "critical": logging.CRITICAL,
+}
+
+
+class SectionColorFormatter(logging.Formatter):
+    RESET = "\033[0m"
+
+    COLOR_CODES = {
+        "asctime": "\033[38;5;245m",  # Soft gray
+        "name": "\033[0;34m",  # Teal/cyan
+        "levelname": {
+            "DEBUG": "\033[1;34m",  # Cool blue
+            "INFO": "\033[1;92m",  # Light purple
+            "WARNING": "\033[38;5;214m",  # Amber
+            "ERROR": "\033[38;5;196m",  # Red
+            "CRITICAL": "\033[38;5;199m",  # Hot pink
+        },
+        "funcName": "\033[0;34m",  # Teal/cyan
+        "message": "\033[37m",  # White
+    }
+
+    FIELD_WIDTHS = {
+        "name": 20,
+        "levelname": 8,
+        "funcName": 20,
+    }
+
+    def __init__(self, fmt=None, datefmt=None):
+        super().__init__(fmt=fmt, datefmt=datefmt)
+        self.used_fields = re.findall(r"%\((.*?)\)", fmt or "")
+
+    def format(self, record):
+        # Add level color if applicable
+        colorized = self._colorize_fields(record)
+        return colorized
+
+    def _colorize_fields(self, record):
+        # Call the base formatter to fill in fields
+        base = super().format(record)
+
+        for field in self.used_fields:
+            raw_val = str(getattr(record, field, ""))
+            if field == "levelname":
+                color = self.COLOR_CODES["levelname"].get(record.levelname, "")
+            else:
+                color = self.COLOR_CODES.get(field, "")
+            pad_width = self.FIELD_WIDTHS.get(field)
+            if pad_width:
+                if len(raw_val) > pad_width:
+                    raw_val = raw_val[: pad_width - 3] + "..."
+                else:
+                    total_pad = pad_width - len(raw_val)
+                    left = total_pad // 2
+                    right = total_pad - left
+                    raw_val = " " * left + raw_val + " " * right
+            colored_val = f"{color}{raw_val}{self.RESET}"
+            base = base.replace(str(getattr(record, field, "")), colored_val, 1)
+        return base
+
+
+def setup_logger(
+    logger_name: str,
+    format: str = "[%(asctime)s] %(levelname)s - %(name)s - %(funcName)s - %(message)s",
+    datefmt: str = "%Y-%m-%d %H:%M:%S",
+    level: str = "debug",
+):
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(LOG_LEVEL_MAP[level])
+    logger.propagate = False
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.DEBUG)
+    formatter = SectionColorFormatter(format, datefmt=datefmt)
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    return logger
 
 
 def get_incoming_waypoint_and_routes(routes: list[carla.Waypoint], steps: int) -> Optional[carla.Waypoint]:

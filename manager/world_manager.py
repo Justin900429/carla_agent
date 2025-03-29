@@ -2,7 +2,8 @@ from collections import defaultdict
 from typing import Callable, Optional
 
 import carla
-from misc.constant import DISTANCE_FOR_ROUTE
+
+from agent_misc.constant import DISTANCE_FOR_ROUTE
 
 
 class WorldManager:

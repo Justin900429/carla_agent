@@ -2382,7 +2382,7 @@ requires-dist = [
     { name = "pygame", specifier = "==2.6.1" },
     { name = "python-dotenv", specifier = "==1.0.1" },
     { name = "scikit-image", specifier = ">=0.25.2" },
-    { name = "shapely", specifier = ">=2.0.7" },
+    { name = "shapely", specifier = "==2.0.7" },
     { name = "tyro", specifier = "==0.9.17" },
     { name = "unstructured", specifier = "==0.17.0" },
 ]

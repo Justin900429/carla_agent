@@ -12,10 +12,13 @@ from agent_misc.utils import (
     get_incoming_waypoint_and_routes,
     get_trafficlight_trigger_location,
     is_within_distance,
+    setup_logger,
 )
 from manager.carla_manager import CarlaManager
 
 MAX_HISTORY_LENGTH = 5
+
+agent_functool_logger = setup_logger("agent_functool", level="debug")
 
 
 @dataclass
@@ -34,11 +37,11 @@ class VehicleInfo:
 
     # Vehicle Detection
     ignore_vehicles: bool = False
-    vehicle_max_distance: float = 5.0
+    vehicle_max_distance: float = 10.0
     lane_offset: float = 0.0
     offset: float = 0.0
     low_angle_th: float = 0.0
-    up_angle_th: float = 0.0
+    up_angle_th: float = 90.0
     use_bbs_detection: bool = False
 
     # Self properties
@@ -96,7 +99,7 @@ async def control_vehicle(
         brake (float): Brake of the vehicle in [0, 1]
         reverse (bool): Reverse of the vehicle
     """
-    print(f"throttle: {throttle}, steer: {steer}, brake: {brake}, reverse: {reverse}")
+    agent_functool_logger.debug(f"throttle: {throttle}, steer: {steer}, brake: {brake}, reverse: {reverse}")
     wrapper.context.previous_control.insert(
         0, f"throttle: {throttle}, steer: {steer}, brake: {brake}, reverse: {reverse}"
     )
@@ -122,6 +125,9 @@ async def fetch_rotation_difference(wrapper: RunContextWrapper[VehicleInfo]) -> 
 
     Args:
         wrapper (RunContextWrapper[VehicleInfo]): Context of the vehicle
+
+    Returns:
+        str: The rotation difference in [-1, 1].
     """
     current_loc = wrapper.context.vehicle.get_location()
     target_loc = wrapper.context.destination_point.transform.location
@@ -141,13 +147,13 @@ async def fetch_rotation_difference(wrapper: RunContextWrapper[VehicleInfo]) -> 
         _dot *= -1.0
     _dot = np.clip(_dot, -1.0, 1.0)
 
-    print(f"heading difference: {_dot:.2f}")
+    agent_functool_logger.debug(f"heading difference: {_dot:.2f}")
 
     return f"heading difference: {_dot:.2f}"
 
 
 @function_tool
-def check_affected_by_traffic_light(wrapper: RunContextWrapper[VehicleInfo]):
+async def check_affected_by_traffic_light(wrapper: RunContextWrapper[VehicleInfo]):
     """Check if there is a red light affecting the vehicle.
 
     Args:
@@ -198,26 +204,22 @@ def check_affected_by_traffic_light(wrapper: RunContextWrapper[VehicleInfo]):
 
 
 @function_tool
-def vehicle_obstacle_detected(
+async def check_vehicle_obstacle(
     wrapper: RunContextWrapper[VehicleInfo],
 ) -> tuple[bool, str, float]:
-    """Check if there is a vehicle that can block the vehicle.
+    """Check if there is a vehicle that can block the ego car.
 
     Args:
-        vehicle_list (list of carla.Vehicle): list contatining vehicle objects.
-            If None, all vehicle in the scene are used
-        max_distance: max freespace to check for obstacles.
-            If None, the base threshold value is used
+        wrapper (RunContextWrapper[VehicleInfo]): Context of the vehicle
 
     Returns:
-        tuple[bool, str, float]: True if there is a vehicle that can block the vehicle, False otherwise.
-        The tuple contains a boolean value, a string of the detected vehicle's location, and a float value.
+        tuple[bool, str, float]:The tuple contains a boolean value, a string of the detected vehicle's location, and a float value.
+        True if there is a vehicle that can block the vehicle, False otherwise.
         The float value is the distance between the vehicle and the detected vehicle.
         If there is no vehicle that can block the vehicle, the tuple contains (False, "null", -1).
     """
 
     def get_route_polygon():
-        route_bb = []
         extent_y = wrapper.context.vehicle.bounding_box.extent.y
         ego_location = wrapper.context.vehicle.get_location()
         r_ext = extent_y + wrapper.context.offset
@@ -225,7 +227,7 @@ def vehicle_obstacle_detected(
         r_vec = wrapper.context.vehicle.get_transform().get_right_vector()
         p1 = ego_location + carla.Location(r_ext * r_vec.x, r_ext * r_vec.y)
         p2 = ego_location + carla.Location(l_ext * r_vec.x, l_ext * r_vec.y)
-        route_bb.extend([[p1.x, p1.y, p1.z], [p2.x, p2.y, p2.z]])
+        route_bb = [[p1.x, p1.y, p1.z], [p2.x, p2.y, p2.z]]
 
         for wp in wrapper.context.total_routes:
             if ego_location.distance(wp.transform.location) > wrapper.context.vehicle_max_distance:
@@ -263,7 +265,6 @@ def vehicle_obstacle_detected(
 
     opposite_invasion = abs(wrapper.context.offset) + vehicle.bounding_box.extent.y > ego_wpt.lane_width / 2
     use_bbs = wrapper.context.use_bbs_detection or opposite_invasion or ego_wpt.is_junction
-
     route_polygon = get_route_polygon()
 
     for target_vehicle in vehicle_list:
@@ -284,6 +285,9 @@ def vehicle_obstacle_detected(
             target_polygon = Polygon(target_list)
 
             if route_polygon.intersects(target_polygon):
+                agent_functool_logger.debug(
+                    f"vehicle obstacle detected: {extract_location_to_string(target_vehicle.get_location())}"
+                )
                 return (
                     True,
                     extract_location_to_string(target_vehicle.get_location()),
@@ -314,10 +318,14 @@ def vehicle_obstacle_detected(
                 max_distance,
                 [wrapper.context.low_angle_th, wrapper.context.up_angle_th],
             ):
+                agent_functool_logger.debug(
+                    f"vehicle obstacle detected: {extract_location_to_string(target_transform.location)}"
+                )
                 return (
                     True,
                     extract_location_to_string(target_transform.location),
                     compute_distance(target_transform.location, ego_transform.location),
                 )
 
+    agent_functool_logger.debug("no vehicle obstacle detected")
     return (False, "null", -1)

@@ -10,17 +10,25 @@ from dotenv import load_dotenv
 
 from agent_misc.agent_functool import (
     VehicleInfo,
+    check_vehicle_obstacle,
     control_vehicle,
     fetch_rotation_difference,
     fetch_vehicle_destination_point,
     fetch_vehicle_location,
 )
-from agent_misc.constant import SYSTEM_PROMPT_WITH_VISION
+from agent_misc.constant import SYSTEM_PROMPT_WO_VISION
+from agent_misc.utils import setup_logger
 from manager.carla_manager import CarlaManager
 from tools.route_planner import GlobalRoutePlanner
 
 CALL_EVERY_N_FRAMES = 5
 REACH_DESTINATION_THRESHOLD = 5
+
+chat_agent_logger = setup_logger(
+    "chat_agent",
+    format="[%(asctime)s] %(levelname)s - %(message)s",
+    level="info",
+)
 
 
 def random_generate_destination_point(carla_manager: CarlaManager, vehicle: carla.Vehicle) -> carla.Location:
@@ -65,7 +73,7 @@ def reach_destination(
 ) -> bool:
     diff = vehicle_info.destination_point.transform.location.distance(vehicle_info.vehicle.get_location())
     if vehicle_info.frame_idx % CALL_EVERY_N_FRAMES == 0:
-        print(f"diff: {diff}")
+        chat_agent_logger.info(f"Distance to destination: {diff}")
     return diff < threshold
 
 
@@ -84,11 +92,13 @@ async def main():
             new_spawn_location = carla_agent.world_manager.get_waypoint_from_location(new_spawn_location)
             carla_agent.spawn_other_vehicle(vehicle.id, transform=new_spawn_location.transform)
         else:
-            print("No new spawn waypoint found")
+            chat_agent_logger.info("No new spawn waypoint found")
             return
 
+        vehicle_info.total_routes = route
         try:
-            for point in route:
+            while len(vehicle_info.total_routes) > 0:
+                point = vehicle_info.total_routes[0]
                 carla_agent.render.set_waypoints(
                     [[p.transform.location.x, p.transform.location.y] for p in [point]]
                 )
@@ -101,12 +111,13 @@ async def main():
                                 fetch_vehicle_destination_point,
                                 fetch_vehicle_location,
                                 fetch_rotation_difference,
+                                check_vehicle_obstacle,
                                 control_vehicle,
                             ],
-                            instructions=SYSTEM_PROMPT_WITH_VISION,
+                            instructions=SYSTEM_PROMPT_WO_VISION,
                         )
-                        frame = vehicle_info.carla_manager.get_frame()
-                        base64_image = encode_image_for_llm_agent(frame)
+                        # frame = vehicle_info.carla_manager.get_frame()
+                        # base64_image = encode_image_for_llm_agent(frame)
                         await Runner.run(
                             starting_agent=agent,
                             input=[
@@ -119,10 +130,10 @@ async def main():
                                             f"{format_previous_control_to_string(vehicle_info.previous_control)}\n"
                                             f"{format_previous_location_to_string(vehicle_info.previous_location)}",
                                         },
-                                        {
-                                            "type": "input_image",
-                                            "image_url": f"data:image/jpeg;base64,{base64_image}",
-                                        },
+                                        # {
+                                        #     "type": "input_image",
+                                        #     "image_url": f"data:image/jpeg;base64,{base64_image}",
+                                        # },
                                     ],
                                 }
                             ],
@@ -130,8 +141,9 @@ async def main():
                         )
                     tick_the_world(vehicle_info)
                     save_frame(vehicle_info, "frames", increment=True)
+                vehicle_info.total_routes.pop(0)
         except KeyboardInterrupt:
-            print("Closing")
+            chat_agent_logger.info("Closing")
 
 
 if __name__ == "__main__":
