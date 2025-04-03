@@ -2,6 +2,7 @@
 
 import math
 from enum import IntEnum
+from typing import Union
 
 import carla
 import networkx as nx
@@ -10,7 +11,7 @@ import numpy as np
 TURN_THRESHOLD = math.radians(35)
 
 
-def vector(location_1, location_2):
+def vector(location_1: carla.Location, location_2: carla.Location) -> list[float]:
     """
     Returns the unit vector from location_1 to location_2
 
@@ -43,7 +44,7 @@ class GlobalRoutePlanner:
     This class provides a very high level route plan.
     """
 
-    def __init__(self, wmap, sampling_resolution):
+    def __init__(self, wmap: carla.Map, sampling_resolution: float):
         self._sampling_resolution = sampling_resolution
         self._wmap = wmap
         self._topology = None
@@ -60,7 +61,9 @@ class GlobalRoutePlanner:
         self._find_loose_ends()
         self._lane_change_link()
 
-    def trace_route(self, origin, destination, point_only: bool = False):
+    def trace_route(
+        self, origin: carla.Location, destination: carla.Location, point_only: bool = False
+    ) -> list[Union[tuple[carla.Waypoint, RoadOption], carla.Waypoint]]:
         """
         This method returns list of (carla.Waypoint, RoadOption)
         from origin to destination

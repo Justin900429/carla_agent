@@ -15,8 +15,9 @@ from agent_misc.utils import (
     setup_logger,
 )
 from manager.carla_manager import CarlaManager
+from tools.route_planner import GlobalRoutePlanner
 
-MAX_HISTORY_LENGTH = 5
+MAX_HISTORY_LENGTH = 10
 
 agent_functool_logger = setup_logger("agent_functool", level="debug")
 
@@ -26,6 +27,7 @@ class VehicleInfo:
     vehicle: carla.Vehicle
     carla_manager: CarlaManager
     destination_point: carla.Waypoint
+    route_planner: GlobalRoutePlanner
     frame_idx: int = 0
     total_routes: list[carla.Waypoint] = field(default_factory=list)
     previous_control: list[str] = field(default_factory=list)
@@ -33,12 +35,12 @@ class VehicleInfo:
 
     # Traffic Light Detection
     ignore_traffic_lights: bool = False
-    traffic_light_max_distance: float = 5.0
+    traffic_light_max_distance: float = 8.0
 
     # Vehicle Detection
     ignore_vehicles: bool = False
     vehicle_max_distance: float = 10.0
-    lane_offset: float = 0.0
+    lane_offset: int = 0
     offset: float = 0.0
     low_angle_th: float = 0.0
     up_angle_th: float = 90.0
@@ -48,8 +50,12 @@ class VehicleInfo:
     lights_list: list[carla.TrafficLight] = field(default_factory=list)
     lights_map: dict[int, carla.Waypoint] = field(default_factory=dict)
 
+    # For finding new destinations
+    blocked_rounds: int = 0
+    is_update_route: bool = False
+
     def __post_init__(self):
-        self.lights_list = self.carla_manager.world_manager.get_actors().filter("*traffic_light*")
+        self.lights_list = self.carla_manager.world_manager.actors.filter("*traffic_light*")
         self.lights_map = {}
         for traffic_light in self.lights_list:
             trigger_location = get_trafficlight_trigger_location(traffic_light)
@@ -58,102 +64,7 @@ class VehicleInfo:
 
 
 @function_tool
-async def fetch_vehicle_destination_point(wrapper: RunContextWrapper[VehicleInfo]) -> str:
-    """Return the destination point of the vehicle with x, y only
-
-    Args:
-        wrapper (RunContextWrapper[VehicleInfo]): Context of the vehicle
-    """
-    location = wrapper.context.destination_point.transform.location
-    return extract_location_to_string(location)
-
-
-@function_tool
-async def fetch_vehicle_location(wrapper: RunContextWrapper[VehicleInfo]) -> str:
-    """Return the location of the vehicle
-
-    Args:
-        wrapper (RunContextWrapper[VehicleInfo]): Context of the vehicle
-
-    Returns:
-        list[str]: return the location of x, y, z of the vehicle
-    """
-    location = wrapper.context.vehicle.get_location()
-    return f"x: {location.x:.2f}, y: {location.y:.2f}, z: {location.z:.2f}"
-
-
-@function_tool
-async def control_vehicle(
-    wrapper: RunContextWrapper[VehicleInfo],
-    throttle: float,
-    steer: float,
-    brake: float,
-    reverse: bool,
-):
-    """Control the vehicle. This function will not update the world but only update the vehicle's control.
-
-    Args:
-        wrapper (RunContextWrapper[VehicleInfo]): Context of the vehicle
-        throttle (float): Throttle of the vehicle in [0, 1]
-        steer (float): Steer of the vehicle in [-1, 1]. smaller than 0 turns the vehicle to the left. Otherwise, turns to the right.
-        brake (float): Brake of the vehicle in [0, 1]
-        reverse (bool): Reverse of the vehicle
-    """
-    agent_functool_logger.debug(f"throttle: {throttle}, steer: {steer}, brake: {brake}, reverse: {reverse}")
-    wrapper.context.previous_control.insert(
-        0, f"throttle: {throttle}, steer: {steer}, brake: {brake}, reverse: {reverse}"
-    )
-    wrapper.context.previous_location.insert(
-        0, extract_location_to_string(wrapper.context.vehicle.get_location())
-    )
-
-    if len(wrapper.context.previous_control) > MAX_HISTORY_LENGTH:
-        wrapper.context.previous_control.pop()
-    if len(wrapper.context.previous_location) > MAX_HISTORY_LENGTH:
-        wrapper.context.previous_location.pop()
-
-    wrapper.context.vehicle.apply_control(
-        carla.VehicleControl(throttle=throttle, steer=steer, brake=brake, reverse=reverse)
-    )
-
-
-@function_tool
-async def fetch_rotation_difference(wrapper: RunContextWrapper[VehicleInfo]) -> str:
-    """Return the rotation difference in [-1, 1].
-    smaller than 0 means the destination is on the counter-clockwise side of the vehicle.
-    larger than 0 means the destination is on the clockwise side of the vehicle.
-
-    Args:
-        wrapper (RunContextWrapper[VehicleInfo]): Context of the vehicle
-
-    Returns:
-        str: The rotation difference in [-1, 1].
-    """
-    current_loc = wrapper.context.vehicle.get_location()
-    target_loc = wrapper.context.destination_point.transform.location
-    current_vec = wrapper.context.vehicle.get_transform().get_forward_vector()
-    target_vec = target_loc - current_loc
-
-    current_vec = np.array([current_vec.x, current_vec.y, 0.0])
-    target_vec = np.array([target_vec.x, target_vec.y, 0.0])
-
-    wv_linalg = np.linalg.norm(target_vec) * np.linalg.norm(current_vec)
-    if wv_linalg == 0:
-        _dot = 1
-    else:
-        _dot = math.acos(np.clip(np.dot(current_vec, target_vec) / (wv_linalg), -1.0, 1.0))
-    _cross = np.cross(current_vec, target_vec)
-    if _cross[2] < 0:
-        _dot *= -1.0
-    _dot = np.clip(_dot, -1.0, 1.0)
-
-    agent_functool_logger.debug(f"heading difference: {_dot:.2f}")
-
-    return f"heading difference: {_dot:.2f}"
-
-
-@function_tool
-async def check_affected_by_traffic_light(wrapper: RunContextWrapper[VehicleInfo]):
+async def check_traffic_light(wrapper: RunContextWrapper[VehicleInfo]):
     """Check if there is a red light affecting the vehicle.
 
     Args:
@@ -198,8 +109,10 @@ async def check_affected_by_traffic_light(wrapper: RunContextWrapper[VehicleInfo
             wrapper.context.traffic_light_max_distance,
             [0, 90],
         ):
+            agent_functool_logger.debug("Red light detected")
             return True
 
+    agent_functool_logger.debug("No red light detected")
     return False
 
 
@@ -247,7 +160,7 @@ async def check_vehicle_obstacle(
         return (False, "null", -1)
 
     vehicle = wrapper.context.vehicle
-    vehicle_list = wrapper.context.carla_manager.world_manager.get_actors().filter("*vehicle*")
+    vehicle_list = wrapper.context.carla_manager.world_manager.actors.filter("*vehicle*")
     max_distance = wrapper.context.vehicle_max_distance
 
     ego_transform = vehicle.get_transform()
@@ -285,8 +198,9 @@ async def check_vehicle_obstacle(
             target_polygon = Polygon(target_list)
 
             if route_polygon.intersects(target_polygon):
+                wrapper.context.blocked_rounds += 1
                 agent_functool_logger.debug(
-                    f"vehicle obstacle detected: {extract_location_to_string(target_vehicle.get_location())}"
+                    f"vehicle obstacle detected: {extract_location_to_string(target_vehicle.get_location())}. Due to polygon intersection"
                 )
                 return (
                     True,
@@ -295,7 +209,8 @@ async def check_vehicle_obstacle(
                 )
         else:
             if target_wpt.road_id != ego_wpt.road_id or target_wpt.lane_id != ego_wpt.lane_id + lane_offset:
-                next_wpt = get_incoming_waypoint_and_routes(wrapper.context.total_routes, steps=3)
+                next_wpt = get_incoming_waypoint_and_routes(wrapper.context.total_routes, steps=0)
+                print(target_wpt.road_id, ego_wpt.road_id)
                 if not next_wpt:
                     continue
                 if (
@@ -318,8 +233,9 @@ async def check_vehicle_obstacle(
                 max_distance,
                 [wrapper.context.low_angle_th, wrapper.context.up_angle_th],
             ):
+                wrapper.context.blocked_rounds += 1
                 agent_functool_logger.debug(
-                    f"vehicle obstacle detected: {extract_location_to_string(target_transform.location)}"
+                    f"vehicle obstacle detected: {extract_location_to_string(target_transform.location)}. Due to extreme small distance"
                 )
                 return (
                     True,
@@ -327,5 +243,173 @@ async def check_vehicle_obstacle(
                     compute_distance(target_transform.location, ego_transform.location),
                 )
 
+    wrapper.context.blocked_rounds = 0
     agent_functool_logger.debug("no vehicle obstacle detected")
     return (False, "null", -1)
+
+
+@function_tool
+async def get_ego_vehicle_location(wrapper: RunContextWrapper[VehicleInfo]) -> str:
+    """Return the location of the ego vehicle
+
+    Args:
+        wrapper (RunContextWrapper[VehicleInfo]): Context of the vehicle
+
+    Returns:
+        list[str]: return the location of x, y, z of the vehicle
+    """
+    location = wrapper.context.vehicle.get_location()
+    return f"x: {location.x:.2f}, y: {location.y:.2f}, z: {location.z:.2f}"
+
+
+@function_tool
+async def get_destination_point(wrapper: RunContextWrapper[VehicleInfo]) -> str:
+    """Return the destination point of the vehicle with x, y only
+
+    Args:
+        wrapper (RunContextWrapper[VehicleInfo]): Context of the vehicle
+    """
+    location = wrapper.context.destination_point.transform.location
+    return extract_location_to_string(location)
+
+
+@function_tool
+async def get_rotation_difference(wrapper: RunContextWrapper[VehicleInfo]) -> str:
+    """Return the rotation difference in [-1, 1].
+    smaller than 0 means the destination is on the counter-clockwise side of the vehicle.
+    larger than 0 means the destination is on the clockwise side of the vehicle.
+
+    Args:
+        wrapper (RunContextWrapper[VehicleInfo]): Context of the vehicle
+
+    Returns:
+        str: The rotation difference in [-1, 1].
+    """
+    current_loc = wrapper.context.vehicle.get_location()
+    target_loc = wrapper.context.destination_point.transform.location
+    current_vec = wrapper.context.vehicle.get_transform().get_forward_vector()
+    target_vec = target_loc - current_loc
+
+    current_vec = np.array([current_vec.x, current_vec.y, 0.0])
+    target_vec = np.array([target_vec.x, target_vec.y, 0.0])
+
+    wv_linalg = np.linalg.norm(target_vec) * np.linalg.norm(current_vec)
+    if wv_linalg == 0:
+        _dot = 1
+    else:
+        _dot = math.acos(np.clip(np.dot(current_vec, target_vec) / (wv_linalg), -1.0, 1.0))
+    _cross = np.cross(current_vec, target_vec)
+    if _cross[2] < 0:
+        _dot *= -1.0
+    _dot = np.clip(_dot, -1.0, 1.0)
+
+    agent_functool_logger.debug(f"heading difference: {_dot:.2f}")
+
+    return f"heading difference: {_dot:.2f}"
+
+
+@function_tool
+async def control_vehicle(
+    wrapper: RunContextWrapper[VehicleInfo],
+    throttle: float,
+    steer: float,
+    brake: float,
+    reverse: bool,
+):
+    """Control the vehicle. This function will not update the world but only update the vehicle's control.
+
+    Args:
+        wrapper (RunContextWrapper[VehicleInfo]): Context of the vehicle
+        throttle (float): Throttle of the vehicle in [0, 1]
+        steer (float): Steer of the vehicle in [-1, 1]. smaller than 0 turns the vehicle to the left. Otherwise, turns to the right.
+        brake (float): Brake of the vehicle in [0, 1]
+        reverse (bool): Reverse of the vehicle
+    """
+    agent_functool_logger.debug(f"throttle: {throttle}, steer: {steer}, brake: {brake}, reverse: {reverse}")
+    wrapper.context.previous_control.insert(
+        0, f"throttle: {throttle}, steer: {steer}, brake: {brake}, reverse: {reverse}"
+    )
+    wrapper.context.previous_location.insert(
+        0, extract_location_to_string(wrapper.context.vehicle.get_location())
+    )
+
+    if len(wrapper.context.previous_control) > MAX_HISTORY_LENGTH:
+        wrapper.context.previous_control.pop()
+    if len(wrapper.context.previous_location) > MAX_HISTORY_LENGTH:
+        wrapper.context.previous_location.pop()
+
+    # Reset the flag to update the route
+    wrapper.context.is_update_route = False
+    wrapper.context.vehicle.apply_control(
+        carla.VehicleControl(throttle=throttle, steer=steer, brake=brake, reverse=reverse)
+    )
+
+
+# ============ Tools for finding a new destination point ============
+
+
+def update_routes(
+    wrapper: RunContextWrapper[VehicleInfo],
+    new_destination_waypoint: carla.Waypoint,
+):
+    wrapper.context.total_routes[0] = new_destination_waypoint
+    wrapper.context.destination_point = new_destination_waypoint
+    plot_length = min(len(wrapper.context.total_routes), 10)
+    wrapper.context.carla_manager.render.set_waypoints(
+        [[p.transform.location.x, p.transform.location.y] for p in wrapper.context.total_routes[:plot_length]]
+    )
+    wrapper.context.blocked_rounds = 0
+    agent_functool_logger.debug("Set up new route")
+    wrapper.context.is_update_route = True
+
+
+@function_tool
+async def is_left_lane_change_allowed(wrapper: RunContextWrapper[VehicleInfo]) -> str:
+    """Check if the left lane change is allowed.
+
+    Args:
+        wrapper (RunContextWrapper[VehicleInfo]): Context of the vehicle
+
+    Returns:
+        str: "true" if a new destination point is available, "false" otherwise.
+    """
+    if wrapper.context.is_update_route:
+        return "false"
+    destination_point = wrapper.context.destination_point
+    left_lane_change_wp = destination_point.get_left_lane()
+    if (
+        (left_lane_change_wp is None)
+        or (left_lane_change_wp.lane_id * destination_point.lane_id < 0)
+        or (left_lane_change_wp.lane_type != carla.LaneType.Driving)
+    ):
+        agent_functool_logger.debug("No left lane change allowed")
+        return "false"
+    agent_functool_logger.debug("Left lane change allowed")
+    update_routes(wrapper, left_lane_change_wp)
+    return "true"
+
+
+@function_tool
+async def is_right_lane_change_allowed(wrapper: RunContextWrapper[VehicleInfo]) -> str:
+    """Check if the right lane change is allowed.
+
+    Args:
+        wrapper (RunContextWrapper[VehicleInfo]): Context of the vehicle
+
+    Returns:
+        str: "true" if a new destination point is available, "false" otherwise.
+    """
+    if wrapper.context.is_update_route:
+        return "false"
+    destination_point = wrapper.context.destination_point
+    right_lane_change_wp = destination_point.get_right_lane()
+    if (
+        (right_lane_change_wp is None)
+        or (right_lane_change_wp.lane_id * destination_point.lane_id < 0)
+        or (right_lane_change_wp.lane_type != carla.LaneType.Driving)
+    ):
+        agent_functool_logger.debug("No right lane change allowed")
+        return "false"
+    agent_functool_logger.debug("Right lane change allowed")
+    update_routes(wrapper, right_lane_change_wp)
+    return "true"

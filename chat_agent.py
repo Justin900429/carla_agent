@@ -4,17 +4,20 @@ import os
 
 import carla
 import cv2
+import numpy as np
 import skimage
+import tyro
 from agents import Agent, Runner, set_tracing_export_api_key
 from dotenv import load_dotenv
 
 from agent_misc.agent_functool import (
     VehicleInfo,
+    check_traffic_light,
     check_vehicle_obstacle,
     control_vehicle,
-    fetch_rotation_difference,
-    fetch_vehicle_destination_point,
-    fetch_vehicle_location,
+    get_rotation_difference,
+    is_left_lane_change_allowed,
+    is_right_lane_change_allowed,
 )
 from agent_misc.constant import SYSTEM_PROMPT_WO_VISION
 from agent_misc.utils import setup_logger
@@ -31,14 +34,16 @@ chat_agent_logger = setup_logger(
 )
 
 
-def random_generate_destination_point(carla_manager: CarlaManager, vehicle: carla.Vehicle) -> carla.Location:
-    destination_location = carla_manager.get_random_location_for_spawn().transform.location
-    while carla_manager.world_manager.compute_distance(vehicle.get_location(), destination_location) < 50:
-        destination_location = carla_manager.get_random_location_for_spawn().transform.location
+def random_generate_destination_point(
+    carla_manager: CarlaManager, location: carla.Location
+) -> carla.Location:
+    destination_location = carla_manager.get_random_waypoint_for_spawn().transform.location
+    while carla_manager.world_manager.compute_distance(location, destination_location) < 50:
+        destination_location = carla_manager.get_random_waypoint_for_spawn().transform.location
     return destination_location
 
 
-def encode_image_for_llm_agent(image):
+def encode_image_for_llm_agent(image: np.ndarray) -> str:
     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     _, buffer = cv2.imencode(".jpg", image)
     return base64.b64encode(buffer).decode("utf-8")
@@ -73,17 +78,28 @@ def reach_destination(
 ) -> bool:
     diff = vehicle_info.destination_point.transform.location.distance(vehicle_info.vehicle.get_location())
     if vehicle_info.frame_idx % CALL_EVERY_N_FRAMES == 0:
-        chat_agent_logger.info(f"Distance to destination: {diff}")
+        chat_agent_logger.info(f"Distance to destination: {diff:.3f}")
     return diff < threshold
 
 
-async def main():
+async def chat_with_agent(model_type: str = "gpt-4o-mini"):
     with CarlaManager() as carla_agent:
-        vehicle = carla_agent.spawn_ego_vehicle(filter_with_type=carla.LaneType.Driving, no_junction=True)
-        destination_point = random_generate_destination_point(carla_agent, vehicle)
+        start_point = carla_agent.get_random_waypoint_for_spawn(
+            filter_with_type=carla.LaneType.Driving, no_junction=True
+        ).transform.location
+        destination_point = random_generate_destination_point(carla_agent, start_point)
         route_planner = GlobalRoutePlanner(carla_agent.world_manager.map, 2.0)
-        route = route_planner.trace_route(vehicle.get_location(), destination_point, point_only=True)[1:]
-        vehicle_info = VehicleInfo(vehicle, carla_agent, None, 0, [], [])
+        route = route_planner.trace_route(start_point, destination_point, point_only=True)
+        vehicle = carla_agent.spawn_ego_vehicle(
+            filter_with_type=carla.LaneType.Driving, transform=route[0].transform
+        )
+        vehicle_info = VehicleInfo(
+            vehicle=vehicle,
+            carla_manager=carla_agent,
+            destination_point=destination_point,
+            route_planner=route_planner,
+            frame_idx=0,
+        )
 
         # Spawn a vehicle that block in front of the ego (testing)
         new_spawn_waypoint = route[0].next(10)
@@ -99,8 +115,12 @@ async def main():
         try:
             while len(vehicle_info.total_routes) > 0:
                 point = vehicle_info.total_routes[0]
+                plot_length = min(len(vehicle_info.total_routes), 10)
                 carla_agent.render.set_waypoints(
-                    [[p.transform.location.x, p.transform.location.y] for p in [point]]
+                    [
+                        [p.transform.location.x, p.transform.location.y]
+                        for p in vehicle_info.total_routes[:plot_length]
+                    ]
                 )
                 vehicle_info.destination_point = point
                 while not reach_destination(vehicle_info, threshold=REACH_DESTINATION_THRESHOLD):
@@ -108,13 +128,15 @@ async def main():
                         agent = Agent[VehicleInfo](
                             name="Driving Assistant",
                             tools=[
-                                fetch_vehicle_destination_point,
-                                fetch_vehicle_location,
-                                fetch_rotation_difference,
+                                check_traffic_light,
                                 check_vehicle_obstacle,
+                                get_rotation_difference,
                                 control_vehicle,
+                                is_left_lane_change_allowed,
+                                is_right_lane_change_allowed,
                             ],
                             instructions=SYSTEM_PROMPT_WO_VISION,
+                            model=model_type,
                         )
                         # frame = vehicle_info.carla_manager.get_frame()
                         # base64_image = encode_image_for_llm_agent(frame)
@@ -127,6 +149,7 @@ async def main():
                                         {
                                             "type": "input_text",
                                             "text": "Control the vehicle to the destination point.\n"
+                                            f"Round for ego being blocked: {vehicle_info.blocked_rounds}\n"
                                             f"{format_previous_control_to_string(vehicle_info.previous_control)}\n"
                                             f"{format_previous_location_to_string(vehicle_info.previous_location)}",
                                         },
@@ -146,7 +169,11 @@ async def main():
             chat_agent_logger.info("Closing")
 
 
+def main(model_type: str = "gpt-4o-mini"):
+    asyncio.run(chat_with_agent(model_type))
+
+
 if __name__ == "__main__":
     load_dotenv()
     set_tracing_export_api_key(os.getenv("OPENAI_API_KEY"))
-    asyncio.run(main())
+    tyro.cli(main)

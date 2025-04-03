@@ -40,6 +40,7 @@ exclude = [
     ".vscode",
     ".ipynb_checkpoints",
     "v2vbench",
+    ".typings"
 ]
 line-length = 110
 indent-width = 4

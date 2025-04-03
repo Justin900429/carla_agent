@@ -7,20 +7,26 @@ from agent_misc.constant import DISTANCE_FOR_ROUTE
 
 
 class WorldManager:
-    def __init__(self, world=None):
-        self.set_world(world)
+    def __init__(self, world: Optional[carla.World] = None):
+        self._world = world
         self.ego_vehicle: dict[int, carla.Vehicle] = {}
         self.background_vehicles: dict[int, dict[int, carla.Vehicle]] = defaultdict(lambda: {})
 
-    def get_actors(self):
+    @property
+    def actors(self) -> carla.ActorList:
         return self.world.get_actors()
-
-    def set_world(self, world):
-        self.world = world
 
     @property
     def map(self):
         return self.world.get_map()
+
+    @property
+    def world(self):
+        return self._world
+
+    @world.setter
+    def world(self, world: carla.World):
+        self._world = world
 
     def get_random_location_from_navigation(self):
         return self.world.get_random_location_from_navigation()
@@ -106,7 +112,7 @@ class WorldManager:
     ) -> tuple[list[carla.Waypoint], list[carla.Waypoint]]:
         if not isinstance(road_id, (list, tuple)):
             road_id = [road_id]
-        road_waypoints = []
+        road_waypoints: list[carla.Waypoint] = []
         for road in road_id:
             road_waypoints.extend(self.get_driving(road))
         right_driving_points = []
@@ -121,7 +127,7 @@ class WorldManager:
     def get_driving_points_with_road_and_lane_id(self, road_id: int, lane_id: int) -> list[carla.Waypoint]:
         if not isinstance(road_id, (list, tuple)):
             road_id = [road_id]
-        road_waypoints = []
+        road_waypoints: list[carla.Waypoint] = []
         for road in road_id:
             road_waypoints.extend(self.get_driving(road))
         driving_points = []
@@ -130,7 +136,13 @@ class WorldManager:
                 driving_points.append(driving_point)
         return driving_points
 
-    def spawn_actor(self, blueprint, transform, attach_to=None, tick=True):
+    def spawn_actor(
+        self,
+        blueprint: carla.BlueprintLibrary,
+        transform: carla.Transform,
+        attach_to: Optional[carla.Actor] = None,
+        tick: bool = True,
+    ) -> carla.Actor:
         actor = self.world.try_spawn_actor(blueprint, transform, attach_to)
         if actor is not None and tick:
             self.world.tick()
@@ -139,7 +151,7 @@ class WorldManager:
     def on_tick(self, callable: Callable):
         self.world.on_tick(callable)
 
-    def tick(self, seconds=10):
+    def tick(self, seconds: float = 10):
         self.world.tick(seconds)
 
     def add_ego_vehicle(self, vehicle: carla.Vehicle):
@@ -150,7 +162,7 @@ class WorldManager:
         if vehicle.id not in self.background_vehicles[ego_id]:
             self.background_vehicles[ego_id][vehicle.id] = vehicle
 
-    def get_all_ego_ids(self):
+    def get_all_ego_ids(self) -> list[int]:
         return list(self.ego_vehicle.keys())
 
     def destroy_all_actors(self):

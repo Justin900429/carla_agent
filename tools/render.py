@@ -1,5 +1,6 @@
 import math
 from dataclasses import dataclass
+from typing import Callable, Optional
 
 import carla
 import numpy as np
@@ -59,16 +60,21 @@ class RenderConfig:
 
 class Util:
     @staticmethod
-    def blits(destination_surface, source_surfaces, rect=None, blend_mode=0):
+    def blits(
+        destination_surface: pygame.Surface,
+        source_surfaces: list[tuple[pygame.Surface, tuple[int, int]]],
+        rect: Optional[pygame.Rect] = None,
+        blend_mode: int = 0,
+    ):
         for surface in source_surfaces:
             destination_surface.blit(surface[0], surface[1], rect, blend_mode)
 
     @staticmethod
-    def length(v):
+    def length(v: carla.Vector3D):
         return math.sqrt(v.x**2 + v.y**2 + v.z**2)
 
     @staticmethod
-    def get_bounding_box(actor):
+    def get_bounding_box(actor: carla.TrafficSign):
         bb = actor.trigger_volume.extent
         corners = [
             carla.Location(x=-bb.x, y=-bb.y),
@@ -84,7 +90,12 @@ class Util:
 
 
 class MapImage:
-    def __init__(self, carla_world, carla_map, pixels_per_meter):
+    def __init__(
+        self,
+        carla_world: carla.World,
+        carla_map: carla.Map,
+        pixels_per_meter: float,
+    ):
         self._pixels_per_meter = pixels_per_meter
         self.scale = 1
 
@@ -109,7 +120,14 @@ class MapImage:
         )
         self.surface = self.big_map_surface
 
-    def draw_road_map(self, map_surface, carla_world, carla_map, world_to_pixel, world_to_pixel_width):
+    def draw_road_map(
+        self,
+        map_surface: pygame.Surface,
+        carla_world: carla.World,
+        carla_map: carla.Map,
+        world_to_pixel: Callable,
+        world_to_pixel_width: Callable,
+    ):
         # Set background black
         map_surface.fill(COLOR_BLACK)
         precision = 0.05
@@ -369,21 +387,32 @@ class MapImage:
 
         # Draw Traffic Signs
         # font_size = world_to_pixel_width(1)
-        # font = pygame.font.SysFont('Arial', font_size, True)
+        # font = pygame.font.SysFont("Arial", font_size, True)
 
         # actors = carla_world.get_actors()
-        # stops = [actor for actor in actors if 'stop' in actor.type_id]
-        # yields = [actor for actor in actors if 'yield' in actor.type_id]
+        # stops = [actor for actor in actors if "stop" in actor.type_id]
+        # yields = [actor for actor in actors if "yield" in actor.type_id]
+        # lights = [actor for actor in actors if "traffic_light" in actor.type_id]
 
         # stop_font_surface = font.render("STOP", False, COLOR_ALUMINIUM_2)
-        # stop_font_surface = pygame.transform.scale(stop_font_surface, (stop_font_surface.get_width(), stop_font_surface.get_height() * 2))
+        # stop_font_surface = pygame.transform.scale(
+        #     stop_font_surface, (stop_font_surface.get_width(), stop_font_surface.get_height() * 2)
+        # )
         # yield_font_surface = font.render("YIELD", False, COLOR_ALUMINIUM_2)
-        # yield_font_surface = pygame.transform.scale(yield_font_surface, (yield_font_surface.get_width(), yield_font_surface.get_height() * 2))
+        # yield_font_surface = pygame.transform.scale(
+        #     yield_font_surface, (yield_font_surface.get_width(), yield_font_surface.get_height() * 2)
+        # )
+        # light_font_surface = font.render("LIGHT", False, COLOR_ALUMINIUM_2)
+        # light_font_surface = pygame.transform.scale(
+        #     light_font_surface, (light_font_surface.get_width(), light_font_surface.get_height() * 2)
+        # )
 
         # for ts_stop in stops:
         #     draw_traffic_signs(map_surface, stop_font_surface, ts_stop, trigger_color=COLOR_SCARLET_RED_1)
         # for ts_yield in yields:
         #     draw_traffic_signs(map_surface, yield_font_surface, ts_yield, trigger_color=COLOR_ORANGE_1)
+        # for light in lights:
+        #     draw_traffic_signs(map_surface, light_font_surface, light, trigger_color=COLOR_SCARLET_RED_2)
 
     def world_to_pixel(self, location, offset=(0, 0)):
         x = self.scale * self._pixels_per_meter * (location.x - self._world_offset[0])

@@ -34,9 +34,9 @@ class CarlaManager:
 
     def set_world(self):
         self.world = self.client.get_world()
-        self.world_manager.set_world(self.world)
+        self.world_manager.world = self.world
 
-    def set_carla_sync_mode(self, sync):
+    def set_carla_sync_mode(self, sync: bool):
         settings = self.world.get_settings()
         settings.synchronous_mode = sync
         settings.fixed_delta_seconds = 0.1 if sync else None
@@ -66,13 +66,13 @@ class CarlaManager:
             self._init_render()
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, *_):
         self.set_carla_sync_mode(False)
         self.world_manager.destroy_all_actors()
         if self.render is not None:
             pygame.quit()
 
-    def get_random_location_for_spawn(
+    def get_random_waypoint_for_spawn(
         self,
         filter_with_type: Optional[carla.LaneType] = None,
         no_junction: bool = False,
@@ -97,7 +97,7 @@ class CarlaManager:
     ) -> carla.Vehicle:
         blueprint = self.world.get_blueprint_library().find(model)
         if transform is None:
-            transform = self.get_random_location_for_spawn(filter_with_type, no_junction).transform
+            transform = self.get_random_waypoint_for_spawn(filter_with_type, no_junction).transform
         new_spawn_point = carla.Transform(transform.location + carla.Location(z=0.1), transform.rotation)
         vehicle = self.world_manager.spawn_actor(blueprint, new_spawn_point)
         if vehicle is not None:
@@ -116,7 +116,7 @@ class CarlaManager:
     ) -> carla.Vehicle:
         blueprint = self.world.get_blueprint_library().find(model)
         if transform is None:
-            transform = self.get_random_location_for_spawn(filter_with_type, no_junction).transform
+            transform = self.get_random_waypoint_for_spawn(filter_with_type, no_junction).transform
         new_spawn_point = carla.Transform(transform.location + carla.Location(z=0.1), transform.rotation)
         vehicle = self.world_manager.spawn_actor(blueprint, new_spawn_point)
         self.world_manager.add_background_vehicle(ego_id, vehicle)
