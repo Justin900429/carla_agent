@@ -2,6 +2,21 @@
 
 ## Introduction
 
+Drive a vehicle in the [CARLA](https://carla.org/) simulator with an **LLM agent** instead of a hand-written controller. At a fixed interval the agent is handed the ego car's situation and a set of tools, and it decides how to act. What it does:
+
+- **Obeys traffic lights** — slows down and brakes when the light ahead is red.
+- **Avoids obstacles** — detects vehicles blocking the way and stops behind them.
+- **Follows a planned route** — a global route planner lays out the path, and the agent steers/throttles to reach the destination.
+- **Reroutes when stuck** — picks a new destination when the ego car stays blocked for too long.
+- **Reasons about lane changes** — checks whether a left or right lane change is allowed before committing.
+- **Grounded in CARLA docs** — the simulator's documentation is indexed into a vector database for the agent to reference.
+
+### Demo
+
+| Stable driving | Turning left |
+| :---: | :---: |
+| ![Stable driving](assets/stable.gif) | ![Turning left](assets/turn_left.gif) |
+
 ### Control logic
 
 The high-level control for the agent is shown below:
@@ -9,26 +24,22 @@ The high-level control for the agent is shown below:
 ```mermaid
 flowchart LR
     A(["Start"]) --> B{"check_traffic_light<br>Is the light red?"}
-    B -- Yes --> C(["Slow down and brake"])
+    B -- Yes --> C(["control_vehicle<br>Slow down and brake"])
     B -- No --> D{"check_vehicle_obstacle<br>Is there an obstacle?"}
-    D -- No --> G(["get_ego_car_location"])
-    D -- Yes --> E{"Is ego car stationary<br>for a while?"}
+    D -- No --> I(["get_rotation_difference"])
+    D -- Yes --> E{"blocked_rounds > 5?"}
     E -- No --> C
-    E -- Yes --> F{"Tools → Is new<br>destination available?"}
+    E -- Yes --> F{"is_left/right_lane_change_allowed<br>New destination available?"}
     F -- No --> C
-    F -- Yes --> G
-    G --> H(["get_destination_point"])
-    H --> I(["get_rotation_difference"])
+    F -- Yes --> I
     I --> J(["control_vehicle<br>Provide proper control"])
 
      A:::terminal
      B:::decision
      C:::action
      D:::decision
-     G:::action
      E:::decision
      F:::decision
-     H:::action
      I:::action
      J:::terminal
     classDef terminal stroke:#2ecc71,stroke-width:2
